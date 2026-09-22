@@ -8,10 +8,36 @@ from netbox_dns_bridge.models import CatalogZone, CatalogZoneMember
 from netbox_dns_bridge.jobs import notify
 from uuid import uuid4
 from base64 import b32encode
+from django.conf import settings
 from django.db import transaction, close_old_connections, OperationalError
 
 
 LOGGER = get_logger(__name__)
+
+SETTINGS = settings.PLUGINS_CONFIG.get("netbox_dns_bridge", {})
+
+
+def catalog_zone_name(view_name: str) -> dns.name.Name:
+    """Return the fully qualified catalog zone name for a view as a
+    dns.name.Name.
+
+    The name is configured via the ``catalog_zone_name`` setting (fallback:
+    ``catz``). With ``catalog_zone_name_includes_view`` enabled, the view
+    name is prepended: ``<view>.<catalog_zone_name>``.
+    """
+    base = dns.name.from_text(SETTINGS.get("catalog_zone_name") or "catz")
+    if SETTINGS.get("catalog_zone_name_includes_view", False):
+        return dns.name.from_text(view_name, origin=base)
+    return base
+
+
+def is_catalog_zone_query(qname: dns.name.Name, view_name: str) -> bool:
+    """Check whether a queried name is the catalog zone name of a view.
+
+    dns.name.Name equality is case-insensitive, so queries from BIND match
+    regardless of case.
+    """
+    return qname == catalog_zone_name(view_name)
 
 
 def increment_soa_serial(view: NBView) -> int:
@@ -47,13 +73,13 @@ def increment_soa_serial(view: NBView) -> int:
             close_old_connections()
             return None
 
-    notify.schedule_catalog_zone_notify(view)
+    schedule_catalog_zone_notify(view)
     return serial
 
 
-def create_zone(name, view_name) -> dns.zone.Zone:
-    # Zone origin
-    origin = dns.name.from_text(name, dns.name.root)
+def create_zone(view_name) -> dns.zone.Zone:
+    # Zone origin: the configured catalog zone name for this view
+    origin = catalog_zone_name(view_name)
 
     # Create a new empty zone
     zone = dns.zone.Zone(origin)
@@ -117,7 +143,7 @@ def create_zone(name, view_name) -> dns.zone.Zone:
         ns_rdataset = _create_ns_rdataset()
         zone_root_node.rdatasets.append(ns_rdataset)
 
-        # version.catz. record
+        # version.<catalog zone name>. record
         version_rdataset = _create_version_rdataset()
         zone_version_node = zone.find_node(
             dns.name.from_text("version", origin), create=True
@@ -156,6 +182,32 @@ def update_member(zone: NBZone) -> None:
     except OperationalError as e:
         LOGGER.error(f"ERROR: Failed to update Catalog Zone member: {e}")
         close_old_connections()
+
+
+def schedule_catalog_zone_notify(view: NBView) -> None:
+    """Schedule a NOTIFY for the catalog zone of a view.
+
+    Notifies transfer clients for the single configured catalog zone name
+    (see ``catalog_zone_name``). The job receives the name as text, since
+    job kwargs are serialized to JSON.
+    """
+    if not SETTINGS.get("notify_clients", False):
+        return
+
+    try:
+        catalog_zone = view.catalog_zone
+    except CatalogZone.DoesNotExist:
+        return
+
+    notify.SendClientNotify.enqueue(
+        zone_name=catalog_zone_name(view.name).to_text(omit_final_dot=True),
+        soa_serial=catalog_zone.soa_serial,
+        view_name=view.name,
+        soa_refresh=catalog_zone.soa_refresh,
+        soa_retry=catalog_zone.soa_retry,
+        soa_expire=catalog_zone.soa_expire,
+        soa_minimum=catalog_zone.soa_minimum,
+    )
 
 
 def _create_soa_rdataset(view: NBView) -> dns.rdataset:

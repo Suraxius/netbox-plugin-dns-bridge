@@ -24,9 +24,9 @@ While providing Zone transfers via AXFR, the Server also exposes specialized cat
 and other RFC9432 compliant DNS Servers use to automatically discover newly created zones and remove
 deleted ones. The plugin supports views and basic DNS security via TSIG.
 
-The plugin exposes one catalog zone per view. Each catalog zone is made available under the special
-zone name **"catz"** and addtionally under **"[viewname].catz"** and may be queried through the
-built-in DNS server just like any other dns zone.
+The plugin exposes one catalog zone per view. The catalog zone name is configurable (see
+[Catalog Zone Naming](#catalog-zone-naming) below) and defaults to **"catz"**. It may be queried
+through the built-in DNS server just like any other dns zone.
 
 For proper operation, each view requires an installed TSIG key, and the `dns-transfer-endpoint` must
 be running as a separate background service using the `manage.py` command. Note that DNSSEC support
@@ -58,6 +58,31 @@ PLUGINS_CONFIG = {
     }
 }
 ```
+
+### Catalog Zone Naming
+The name of the catalog zone exposed for each view is configurable:
+
+Setting | Default | Description
+------- | ------- | -----------------------------------------------------------
+`catalog_zone_name` | `catz` | The name of the catalog zone. May be a full DNS name.
+`catalog_zone_name_includes_view` | `False` | Prepend the view name: `<view>.<catalog_zone_name>`.
+
+`catalog_zone_name` accepts full DNS names with multiple labels. Case and a trailing dot are
+irrelevant — names are handled and compared as `dns.name.Name` objects. With
+`catalog_zone_name_includes_view` disabled (the default), the plain `catalog_zone_name` is used for
+every view; when enabled, the view name is prepended (e.g. `_default_.catz`).
+
+```
+'netbox_dns_bridge': {
+    'catalog_zone_name': 'catz',
+    'catalog_zone_name_includes_view': False,
+    ...
+}
+```
+
+Note that the DNS server consuming the catalog zone must be configured with the same zone name,
+e.g. BIND9's `catalog-zones { zone "<catalog_zone_name>" ... }` statement and the corresponding
+slave zone declaration must match.
 
 ### TSIG Authentication
 Following sets the TSIG key that allows clients to query the transfer endpoint and also the key to

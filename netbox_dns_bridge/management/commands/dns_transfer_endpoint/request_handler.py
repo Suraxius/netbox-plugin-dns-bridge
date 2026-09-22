@@ -289,9 +289,8 @@ class DNSBaseRequestHandler(socketserver.BaseRequestHandler):
             return
 
         # Check if catalog zone
-        dname_lower = dname.lower()
-        if dname_lower == "catz" or dname_lower == f"{nb_view.name.lower()}.catz":
-            zone = catzm.create_zone(dname_lower, nb_view.name)
+        if catzm.is_catalog_zone_query(qname, nb_view.name):
+            zone = catzm.create_zone(nb_view.name)
         else:
             zone = self._get_zone_from_nb(dname, nb_view.name)
         # When zone was not found, let client know

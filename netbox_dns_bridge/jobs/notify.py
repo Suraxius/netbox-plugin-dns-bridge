@@ -12,7 +12,7 @@ from django.db import close_old_connections, OperationalError
 from netbox.jobs import JobRunner
 from netbox_dns.models import View, Zone, Record
 from netbox_dns_bridge.utils import get_logger
-from netbox_dns_bridge.models import SeenTransferClient, CatalogZone
+from netbox_dns_bridge.models import SeenTransferClient
 
 LOGGER = get_logger(__name__)
 SETTINGS = settings.PLUGINS_CONFIG.get("netbox_dns_bridge", {})
@@ -280,39 +280,4 @@ def schedule_ns_notify(zone: Zone):
         zone_name=zone.name,
         view_name=zone.view.name,
         soa_serial=soa_serial,
-    )
-
-
-def schedule_catalog_zone_notify(view: View):
-    if not SETTINGS.get("notify_clients", False):
-        return
-
-    try:
-        catalog_zone = view.catalog_zone
-    except CatalogZone.DoesNotExist:
-        return
-
-    serial = catalog_zone.soa_serial
-    soa_refresh = catalog_zone.soa_refresh
-    soa_retry = catalog_zone.soa_retry
-    soa_expire = catalog_zone.soa_expire
-    soa_minimum = catalog_zone.soa_minimum
-
-    SendClientNotify.enqueue(
-        zone_name="catz",
-        soa_serial=serial,
-        view_name=view.name,
-        soa_refresh=soa_refresh,
-        soa_retry=soa_retry,
-        soa_expire=soa_expire,
-        soa_minimum=soa_minimum,
-    )
-    SendClientNotify.enqueue(
-        zone_name=f"{view.name}.catz",
-        soa_serial=serial,
-        view_name=view.name,
-        soa_refresh=soa_refresh,
-        soa_retry=soa_retry,
-        soa_expire=soa_expire,
-        soa_minimum=soa_minimum,
     )

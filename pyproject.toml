@@ -32,5 +32,5 @@ where = ["."]
 version = { attr = "netbox_dns_bridge.__version__" }
 
 [project.urls]
-Homepage = "https://github.com/Suraxius/netbox-plugin-bind-provisioner"
-Issues = "https://github.com/Suraxius/netbox-plugin-bind-provisioner/issues"
+Homepage = "https://github.com/Suraxius/netbox-plugin-dns-bridge"
+Issues = "https://github.com/Suraxius/netbox-plugin-dns-bridge/issues"

@@ -1,0 +1,45 @@
+name: Publish Python package to PyPI
+
+#on:
+#  push:
+#    tags:
+#      - "v*"
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: self-hosted
+
+    steps:
+      - name: Check out repository
+        uses: https://github.com/actions/checkout@v4
+
+      - name: Create virtual environment
+        run: python3 -m venv .venv
+
+      - name: Install build tools
+        run: .venv/bin/pip install --upgrade build twine
+
+      - name: Verify tag matches package version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="$(grep -m1 '^version = ' pyproject.toml | cut -d '"' -f2)"
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Tag ${TAG} does not match package version v${VERSION}"
+            exit 1
+          fi
+
+      - name: Build package
+        run: .venv/bin/python3 -m build
+
+      - name: Check package
+        run: .venv/bin/python3 -m twine check dist/*
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+          TWINE_NON_INTERACTIVE: "1"
+        run: .venv/bin/python3 -m twine upload dist/*

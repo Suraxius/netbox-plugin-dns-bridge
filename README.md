@@ -60,19 +60,19 @@ changes (RFC 1996).
 ```mermaid
 flowchart LR
     subgraph netbox ["NetBox"]
-        subgraph plugins ["NetBox Plugins"]
-            IPAM[IPAM]
-            DNS["NetBox DNS"]
-            subgraph bridge ["NetBox DNS Bridge"]
-                TE["Transfer<br/>Endpoint"]
-            end
+        DNS[DNS]
+        QUEUE["Job Queue"]
+        subgraph bridge ["DNS Bridge"]
+            TE["Transfer<br/>Endpoint"]
         end
     end
 
     DNSSRV["DNS Server<br/>(RFC 9432)<br/>e.g. BIND9"]
 
     DNSSRV -- "AXFR (RFC 5936)<br/>Catalog Zone (RFC 9432)" --> TE
-    TE -.->|"NOTIFY (RFC 1996)"| DNSSRV
+    bridge -.->|"Listening for zone change signals"| DNS
+    bridge -- "Queue NOTIFY job on zone change" --> QUEUE
+    QUEUE -- "NOTIFY (RFC 1996)" --> DNSSRV
 ```
 
 - **Zone transfers (RFC 5936)** — DNS servers pull authoritative zone data directly from NetBox.
